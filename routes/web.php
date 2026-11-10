@@ -21,6 +21,11 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
         return view('admin.dashboard');
     })->name('admin.dashboard');
 
+    // CRUD Completo de Usuarios (Listar, Crear, Guardar, Editar, Actualizar, Eliminar)
+    Route::get('/usuarios', [UsuarioController::class, 'index'])->name('admin.usuarios.index');
     Route::get('/usuarios/crear', [UsuarioController::class, 'create'])->name('admin.usuarios.create');
     Route::post('/usuarios', [UsuarioController::class, 'store'])->name('admin.usuarios.store');
+    Route::get('/usuarios/{id}/editar', [UsuarioController::class, 'edit'])->name('admin.usuarios.edit');
+    Route::put('/usuarios/{id}', [UsuarioController::class, 'update'])->name('admin.usuarios.update');
+    Route::delete('/usuarios/{id}', [UsuarioController::class, 'destroy'])->name('admin.usuarios.destroy');
 });

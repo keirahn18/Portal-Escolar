@@ -7,48 +7,143 @@ use App\Models\Usuario;
 use App\Models\Rol;
 use App\Models\Institucion;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rules\Password;
 
 class UsuarioController extends Controller
 {
     /**
-     * Muestra el formulario para registrar un nuevo usuario (Docente / Directivo).
+     * Muestra la lista general de usuarios registrados.
+     */
+    public function index()
+    {
+        // Traemos todos los usuarios junto con su rol
+        $usuarios = Usuario::with('rol')->orderBy('id_usuario', 'desc')->get();
+
+        return view('admin.usuarios.index', compact('usuarios'));
+    }
+
+    /**
+     * Muestra el formulario para registrar un nuevo docente/administrador.
      */
     public function create()
     {
         $roles = Rol::all();
-        $instituciones = Institucion::all();
 
-        return view('admin.usuarios.create', compact('roles', 'instituciones'));
+        return view('admin.usuarios.create', compact('roles'));
     }
 
     /**
-     * Guarda el nuevo usuario registrado en la base de datos.
+     * Guarda el nuevo usuario con el correo esc-DNI@gmail.com.
      */
     public function store(Request $request)
     {
         $request->validate([
             'nombre' => ['required', 'string', 'max:255'],
             'apellido' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:usuarios,email'],
-            'password' => ['required', Password::defaults()],
+            'email' => [
+                'required', 
+                'string', 
+                'email', 
+                'max:255', 
+                'unique:usuarios,email',
+                'regex:/^esc-[0-9]{7,8}@gmail\.com$/i'
+            ],
+            'password' => ['required', 'string', 'min:8'],
             'fk_id_rol' => ['required', 'exists:rols,id_rol'],
-            'fk_id_institucion' => ['required', 'exists:institucions,id_institucion'],
         ], [
-            'email.unique' => 'El correo electrónico ingresado ya se encuentra registrado.',
-            'fk_id_rol.exists' => 'El rol seleccionado no es válido.',
+            'nombre.required' => 'El nombre del docente es obligatorio.',
+            'apellido.required' => 'El apellido es obligatorio.',
+            'email.required' => 'El correo electrónico es obligatorio.',
+            'email.unique' => 'Este correo/DNI ya se encuentra registrado.',
+            'email.regex' => 'El formato debe ser obligatorio: esc-DNI@gmail.com (Ej: esc-40123456@gmail.com).',
+            'password.required' => 'La contraseña es obligatoria.',
+            'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
+            'fk_id_rol.required' => 'Debés seleccionar un rol.',
         ]);
 
+        $institucion = Institucion::first();
+
         Usuario::create([
-            'nombre' => $request->nombre,
-            'apellido' => $request->apellido,
-            'email' => $request->email,
-            'password' => $request->password, // El cast 'hashed' en Usuario.php la encripta solo
+            'nombre' => trim($request->nombre),
+            'apellido' => trim($request->apellido),
+            'email' => strtolower(trim($request->email)),
+            'password' => $request->password, // El cast 'password' => 'hashed' lo encripta
             'fk_id_rol' => $request->fk_id_rol,
-            'fk_id_institucion' => $request->fk_id_institucion,
+            'fk_id_institucion' => $institucion->id_institucion,
             'email_verified_at' => now(),
         ]);
 
-        return redirect()->route('admin.dashboard')->with('status', '¡Usuario registrado exitosamente!');
+        return redirect()->route('admin.usuarios.index')->with('status', '¡Usuario creado exitosamente!');
+    }
+
+    /**
+     * Muestra el formulario para editar a un usuario existente.
+     */
+    public function edit($id)
+    {
+        $usuario = Usuario::findOrFail($id);
+        $roles = Rol::all();
+
+        return view('admin.usuarios.edit', compact('usuario', 'roles'));
+    }
+
+    /**
+     * Actualiza los datos del usuario en la base de datos.
+     */
+    public function update(Request $request, $id)
+    {
+        $usuario = Usuario::findOrFail($id);
+
+        $request->validate([
+            'nombre' => ['required', 'string', 'max:255'],
+            'apellido' => ['required', 'string', 'max:255'],
+            'email' => [
+                'required', 
+                'string', 
+                'email', 
+                'max:255', 
+                'unique:usuarios,email,' . $usuario->id_usuario . ',id_usuario',
+                'regex:/^esc-[0-9]{7,8}@gmail\.com$/i'
+            ],
+            'fk_id_rol' => ['required', 'exists:rols,id_rol'],
+        ], [
+            'email.regex' => 'El formato debe ser esc-DNI@gmail.com.',
+            'email.unique' => 'Este correo ya lo está usando otro usuario.',
+        ]);
+
+        $usuario->nombre = trim($request->nombre);
+        $usuario->apellido = trim($request->apellido);
+        $usuario->email = strtolower(trim($request->email));
+        $usuario->fk_id_rol = $request->fk_id_rol;
+
+        // Si se ingresó una nueva contraseña opcional, se actualiza
+        if ($request->filled('password')) {
+            $request->validate([
+                'password' => ['min:8']
+            ], [
+                'password.min' => 'La nueva contraseña debe tener al menos 8 caracteres.'
+            ]);
+            $usuario->password = $request->password;
+        }
+
+        $usuario->save();
+
+        return redirect()->route('admin.usuarios.index')->with('status', '¡Usuario actualizado exitosamente!');
+    }
+
+    /**
+     * Elimina el usuario del sistema.
+     */
+    public function destroy($id)
+    {
+        $usuario = Usuario::findOrFail($id);
+
+        // Evitar que el usuario logueado se elimine a sí mismo
+        if (auth()->id() == $usuario->id_usuario) {
+            return back()->withErrors(['error' => 'No podés eliminar tu propia cuenta de administrador.']);
+        }
+
+        $usuario->delete();
+
+        return redirect()->route('admin.usuarios.index')->with('status', '¡Usuario eliminado con éxito!');
     }
 }

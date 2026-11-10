@@ -10,7 +10,7 @@ class AuthController extends Controller
 {
     /**
      * Muestra la vista del formulario de login.
-     * Si el usuario ya está autenticado o recordado, lo redirige al Dashboard.
+     * Si el usuario ya está autenticado, lo redirige al Dashboard.
      */
     public function showLoginForm()
     {
