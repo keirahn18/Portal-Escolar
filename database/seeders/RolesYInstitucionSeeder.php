@@ -26,10 +26,10 @@ class RolesYInstitucionSeeder extends Seeder
         Usuario::create([
             'fk_id_rol' => $rolAdmin->id_rol,
             'fk_id_institucion' => $institucion->id_institucion,
-            'nombre' => 'Ana',
-            'apellido' => 'Rahn',
-            'email' => 'admin@epep436.edu.ar',
-            'password' => Hash::make('admin1234'),
+            'nombre' => 'Mirian Beatriz',
+            'apellido' => 'Alegre',
+            'email' => 'admin@gmail.com',
+            'password' => 'admin1234',
             'email_verified_at' => now(),
         ]);
     }

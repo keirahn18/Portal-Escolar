@@ -10,9 +10,14 @@ class AuthController extends Controller
 {
     /**
      * Muestra la vista del formulario de login.
+     * Si el usuario ya está autenticado o recordado, lo redirige al Dashboard.
      */
     public function showLoginForm()
     {
+        if (Auth::check()) {
+            return redirect()->route('admin.dashboard');
+        }
+
         return view('auth.login');
     }
 
@@ -26,11 +31,10 @@ class AuthController extends Controller
             'password' => ['required'],
         ], [
             'email.required' => 'El correo electrónico es obligatorio.',
-            'email.email' => 'Ingresa un correo electrónico válido.',
+            'email.email' => 'Ingresá un correo electrónico válido.',
             'password.required' => 'La contraseña es obligatoria.',
         ]);
 
-        // Intento de autenticación con regeneración de sesión por seguridad
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             $request->session()->regenerate();
 
