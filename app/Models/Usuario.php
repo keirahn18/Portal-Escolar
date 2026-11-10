@@ -31,17 +31,15 @@ class Usuario extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed', // Hashea automáticamente con Bcrypt
+            'password' => 'hashed',
         ];
     }
 
-    // Relación con Rol
     public function rol()
     {
         return $this->belongsTo(Rol::class, 'fk_id_rol', 'id_rol');
     }
 
-    // Relación con Institución
     public function institucion()
     {
         return $this->belongsTo(Institucion::class, 'fk_id_institucion', 'id_institucion');
