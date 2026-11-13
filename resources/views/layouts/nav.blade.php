@@ -19,20 +19,27 @@
                         Dashboard
                     </a>
                     
-                    <a href="{{ route('admin.usuarios.index') }}" 
-                       class="px-3 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1.5 {{ request()->routeIs('admin.usuarios.index') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
-                        <span>Gestión de Personal</span>
+                    @if(auth()->user()->esAdmin())
+                        <a href="{{ route('admin.usuarios.index') }}" 
+                           class="px-3 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1.5 {{ request()->routeIs('admin.usuarios.index') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
+                            <span>Gestión de Personal</span>
+                        </a>
+
+                        <a href="{{ route('admin.usuarios.create') }}" 
+                           class="px-3 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1 {{ request()->routeIs('admin.usuarios.create') ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
+                            <span class="text-emerald-600 font-bold">+</span>
+                            <span>Nuevo Usuario</span>
+                        </a>
+                    @endif
+
+                    <a href="{{ route('admin.publicaciones.index') }}" 
+                       class="px-3 py-2 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.publicaciones.*') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
+                        Noticias
                     </a>
 
-                    <a href="{{ route('admin.usuarios.create') }}" 
-                       class="px-3 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1 {{ request()->routeIs('admin.usuarios.create') ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
-                        <span class="text-emerald-600 font-bold">+</span>
-                        <span>Nuevo Usuario</span>
-                    </a>
-                    <a href="{{ route('admin.publicaciones.index') }}" 
-                       class="px-3 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1 {{ request()->routeIs('admin.noticias.index') ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
-                        <span class="text-emerald-600 font-bold">+</span>
-                        <span>Noticias</span>
+                    <a href="{{ route('admin.eventos.index') }}" 
+                       class="px-3 py-2 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.eventos.*') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
+                        Eventos
                     </a>
                 </div>
             </div>
@@ -83,20 +90,27 @@
             📌 Dashboard
         </a>
         
-        <a href="{{ route('admin.usuarios.index') }}" 
-           class="block px-3 py-2.5 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.usuarios.index') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' }}">
-            👥 Gestión de Personal
+        @if(auth()->user()->esAdmin())
+            <a href="{{ route('admin.usuarios.index') }}" 
+               class="block px-3 py-2.5 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.usuarios.index') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' }}">
+                👥 Gestión de Personal
+            </a>
+
+            <a href="{{ route('admin.usuarios.create') }}" 
+               class="block px-3 py-2.5 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.usuarios.create') ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' }}">
+                ➕ Registrar Nuevo Personal
+            </a>
+        @endif
+
+        <a href="{{ route('admin.publicaciones.index') }}" 
+           class="block px-3 py-2.5 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.publicaciones.*') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' }}">
+            📰 Noticias y Cartelera
         </a>
 
-        <a href="{{ route('admin.usuarios.create') }}" 
-           class="block px-3 py-2.5 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.usuarios.create') ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' }}">
-            ➕ Registrar Nuevo Personal
+        <a href="{{ route('admin.eventos.index') }}" 
+           class="block px-3 py-2.5 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.eventos.*') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' }}">
+            📅 Agenda de Eventos
         </a>
-        <a href="{{ route('admin.publicaciones.index') }}" 
-                       class="px-3 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1 {{ request()->routeIs('admin.noticias.index') ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
-                        <span class="text-emerald-600 font-bold">+</span>
-                        <span>Noticias</span>
-                    </a>
 
         <div class="pt-2 border-t border-slate-100">
             <form action="{{ route('logout') }}" method="POST" class="w-full">

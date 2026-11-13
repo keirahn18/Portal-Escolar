@@ -16,6 +16,7 @@ class Evento extends Model
         'fk_usuario',
         'fk_id_cat_evento',
         'fk_id_tipo_evento',
+        'fk_docente_encargado',
         'fk_id_institucion',
         'titulo',
         'descripcion',
@@ -36,6 +37,11 @@ class Evento extends Model
     public function usuario()
     {
         return $this->belongsTo(Usuario::class, 'fk_usuario', 'id_usuario');
+    }
+
+    public function docenteEncargado()
+    {
+        return $this->belongsTo(Usuario::class, 'fk_docente_encargado', 'id_usuario');
     }
 
     public function categoria()

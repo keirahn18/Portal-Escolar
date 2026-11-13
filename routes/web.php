@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Admin\UsuarioController;
 use App\Http\Controllers\Admin\PublicacionController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\EventoController;
 
 // Redirección raíz a login
 Route::get('/', function () {
@@ -39,4 +40,10 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
     Route::put('/noticias/{id}', [PublicacionController::class, 'update'])->name('admin.publicaciones.update');
     Route::delete('/noticias/{id}', [PublicacionController::class, 'destroy'])->name('admin.publicaciones.destroy');
     Route::delete('/noticias/imagen/{idImagen}', [PublicacionController::class, 'destroyImagen'])->name('admin.publicaciones.imagen.destroy');
+    // Calendario y CRUD de Eventos
+    Route::get('/eventos', [EventoController::class, 'index'])->name('admin.eventos.index');
+    Route::get('/eventos/feed', [EventoController::class, 'feed'])->name('admin.eventos.feed');
+    Route::post('/eventos', [EventoController::class, 'store'])->name('admin.eventos.store');
+    Route::put('/eventos/{id}', [EventoController::class, 'update'])->name('admin.eventos.update');
+    Route::delete('/eventos/{id}', [EventoController::class, 'destroy'])->name('admin.eventos.destroy');
 });

@@ -11,11 +11,22 @@ use Illuminate\Http\Request;
 class UsuarioController extends Controller
 {
     /**
+     * Verifica que el usuario autenticado tenga rol de Administrador / Directivo.
+     */
+    private function verificarAdmin(): void
+    {
+        if (!auth()->user()->esAdmin()) {
+            abort(403, 'Acceso exclusivo para personal Directivo / Administrador.');
+        }
+    }
+
+    /**
      * Muestra la lista general de usuarios registrados.
      */
     public function index()
     {
-        // Traemos todos los usuarios junto con su rol
+        $this->verificarAdmin();
+
         $usuarios = Usuario::with('rol')->orderBy('id_usuario', 'desc')->get();
 
         return view('admin.usuarios.index', compact('usuarios'));
@@ -26,6 +37,8 @@ class UsuarioController extends Controller
      */
     public function create()
     {
+        $this->verificarAdmin();
+
         $roles = Rol::all();
 
         return view('admin.usuarios.create', compact('roles'));
@@ -36,6 +49,8 @@ class UsuarioController extends Controller
      */
     public function store(Request $request)
     {
+        $this->verificarAdmin();
+
         $request->validate([
             'nombre' => ['required', 'string', 'max:255'],
             'apellido' => ['required', 'string', 'max:255'],
@@ -80,6 +95,8 @@ class UsuarioController extends Controller
      */
     public function edit($id)
     {
+        $this->verificarAdmin();
+
         $usuario = Usuario::findOrFail($id);
         $roles = Rol::all();
 
@@ -91,6 +108,8 @@ class UsuarioController extends Controller
      */
     public function update(Request $request, $id)
     {
+        $this->verificarAdmin();
+
         $usuario = Usuario::findOrFail($id);
 
         $request->validate([
@@ -115,7 +134,6 @@ class UsuarioController extends Controller
         $usuario->email = strtolower(trim($request->email));
         $usuario->fk_id_rol = $request->fk_id_rol;
 
-        // Si se ingresó una nueva contraseña opcional, se actualiza
         if ($request->filled('password')) {
             $request->validate([
                 'password' => ['min:8']
@@ -135,9 +153,10 @@ class UsuarioController extends Controller
      */
     public function destroy($id)
     {
+        $this->verificarAdmin();
+
         $usuario = Usuario::findOrFail($id);
 
-        // Evitar que el usuario logueado se elimine a sí mismo
         if (auth()->id() == $usuario->id_usuario) {
             return back()->withErrors(['error' => 'No podés eliminar tu propia cuenta de administrador.']);
         }
