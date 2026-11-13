@@ -29,6 +29,11 @@
                         <span class="text-emerald-600 font-bold">+</span>
                         <span>Nuevo Usuario</span>
                     </a>
+                    <a href="{{ route('admin.publicaciones.index') }}" 
+                       class="px-3 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1 {{ request()->routeIs('admin.noticias.index') ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
+                        <span class="text-emerald-600 font-bold">+</span>
+                        <span>Noticias</span>
+                    </a>
                 </div>
             </div>
 
@@ -87,6 +92,11 @@
            class="block px-3 py-2.5 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.usuarios.create') ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' }}">
             ➕ Registrar Nuevo Personal
         </a>
+        <a href="{{ route('admin.publicaciones.index') }}" 
+                       class="px-3 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1 {{ request()->routeIs('admin.noticias.index') ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
+                        <span class="text-emerald-600 font-bold">+</span>
+                        <span>Noticias</span>
+                    </a>
 
         <div class="pt-2 border-t border-slate-100">
             <form action="{{ route('logout') }}" method="POST" class="w-full">

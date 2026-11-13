@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Admin\UsuarioController;
+use App\Http\Controllers\Admin\PublicacionController;
 use Illuminate\Support\Facades\Route;
 
 // Redirección raíz a login
@@ -16,7 +17,7 @@ Route::post('/login', [AuthController::class, 'login'])->name('login.store');
 // Rutas protegidas
 Route::middleware(['auth'])->prefix('admin')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
-    
+
     Route::get('/dashboard', function () {
         return view('admin.dashboard');
     })->name('admin.dashboard');
@@ -28,4 +29,14 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
     Route::get('/usuarios/{id}/editar', [UsuarioController::class, 'edit'])->name('admin.usuarios.edit');
     Route::put('/usuarios/{id}', [UsuarioController::class, 'update'])->name('admin.usuarios.update');
     Route::delete('/usuarios/{id}', [UsuarioController::class, 'destroy'])->name('admin.usuarios.destroy');
+
+    // CRUD Completo de Noticias y Galería de Imágenes
+    Route::get('/noticias', [PublicacionController::class, 'index'])->name('admin.publicaciones.index');
+    Route::get('/noticias/crear', [PublicacionController::class, 'create'])->name('admin.publicaciones.create');
+    Route::get('/noticias/{id}', [PublicacionController::class, 'show'])->name('admin.publicaciones.show');
+    Route::post('/noticias', [PublicacionController::class, 'store'])->name('admin.publicaciones.store');
+    Route::get('/noticias/{id}/editar', [PublicacionController::class, 'edit'])->name('admin.publicaciones.edit');
+    Route::put('/noticias/{id}', [PublicacionController::class, 'update'])->name('admin.publicaciones.update');
+    Route::delete('/noticias/{id}', [PublicacionController::class, 'destroy'])->name('admin.publicaciones.destroy');
+    Route::delete('/noticias/imagen/{idImagen}', [PublicacionController::class, 'destroyImagen'])->name('admin.publicaciones.imagen.destroy');
 });
