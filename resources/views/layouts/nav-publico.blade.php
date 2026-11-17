@@ -4,7 +4,7 @@
             
             <!-- Logo e Identidad Institucional -->
             <a href="{{ route('portal.index') }}" class="flex items-center gap-3.5 group">
-                <img src="{{ asset('images/logo.png') }}" alt="Escudo E.P.E.P. N° 436" class="h-11 w-auto object-contain group-hover:scale-105 transition duration-200">
+                <img src="{{ asset('images/logo.jpeg') }}" alt="Escudo E.P.E.P. N° 436" class="h-11 w-auto object-contain group-hover:scale-105 transition duration-200">
                 <div>
                     <span class="block text-sm sm:text-base font-extrabold text-slate-900 tracking-tight leading-tight">
                         E.P.E.P. N° 436 "Simón Bolívar"

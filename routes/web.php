@@ -5,12 +5,20 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Admin\UsuarioController;
 use App\Http\Controllers\Admin\PublicacionController;
 use App\Http\Controllers\Admin\EventoController;
+use App\Http\Controllers\ChatBotController;
 use Illuminate\Support\Facades\Route;
 
 // ================= RUTAS PÚBLICAS (FAMILIAS Y COMUNIDAD) =================
 Route::get('/', [PortalController::class, 'index'])->name('portal.index');
 Route::get('/noticia/{id}', [PortalController::class, 'showNoticia'])->name('portal.noticia');
 Route::get('/api/eventos-publicos', [PortalController::class, 'eventosFeed'])->name('portal.eventos.feed');
+
+Route::prefix('portal/chat')->name('portal.chat.')->group(function () {
+    Route::post('/preguntar', [ChatBotController::class, 'preguntar'])->name('preguntar');
+    Route::post('/derivar', [ChatBotController::class, 'derivar'])->name('derivar');
+    Route::get('/seguimiento/{codigo}', [ChatBotController::class, 'seguimiento'])->name('seguimiento');
+    Route::post('/seguimiento/{codigo}/responder', [ChatBotController::class, 'responderFamilia'])->name('responder');
+});
 
 // ================= AUTENTICACIÓN =================
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');

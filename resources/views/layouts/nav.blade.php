@@ -10,7 +10,7 @@
             <!-- Marca Institucional y Enlaces Desktop -->
             <div class="flex items-center gap-4 sm:gap-8">
                 <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-3 group">
-                    <img src="{{ asset('images/logo.png') }}" alt="Logo E.P.E.P. N° 436" class="h-9 w-auto object-contain group-hover:scale-105 transition">
+                    <img src="{{ asset('images/logo.jpeg') }}" alt="Logo E.P.E.P. N° 436" class="h-9 w-auto object-contain group-hover:scale-105 transition">
                     <div>
                         <span class="block text-xs sm:text-sm font-extrabold text-slate-800 leading-none">E.P.E.P. N° 436</span>
                         <span class="text-[10px] sm:text-[11px] text-sky-600 font-medium">Panel Administrativo</span>

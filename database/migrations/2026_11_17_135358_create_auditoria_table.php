@@ -18,9 +18,9 @@ return new class extends Migration
             $table->dateTime('fecha')->useCurrent();
             $table->timestamps();
 
-            $table->foreign('fk_id_usuario')
-                ->references('id')
-                ->on('users')
+          $table->foreign('fk_id_usuario')
+                ->references('id_usuario')
+                ->on('usuarios')
                 ->onDelete('cascade');
         });
     }

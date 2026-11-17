@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use App\Models\Consulta;
 use Illuminate\Notifications\Notifiable;
 
 class Usuario extends Authenticatable
@@ -54,5 +55,10 @@ class Usuario extends Authenticatable
     public function esDocente(): bool
     {
         return strtolower($this->rol->nombre ?? '') === 'docente';
+    }
+
+    public function consultasAsignadas()
+    {
+        return $this->hasMany(Consulta::class, 'fk_id_usuario', 'id_usuario');
     }
 }

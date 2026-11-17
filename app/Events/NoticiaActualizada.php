@@ -38,7 +38,7 @@ class NoticiaActualizada implements ShouldBroadcastNow
                 : 'Hacé clic para ver el detalle completo de esta publicación.',
             'imagen_portada' => $imagenes->isNotEmpty() ? asset($imagenes->first()->ruta_img) : null,
             'fotos_extra' => max(0, $imagenes->count() - 1),
-            'logo_fallback' => asset('images/logo.png'),
+            'logo_fallback' => asset('images/logo.jpeg'),
             'url' => route('portal.noticia', $publicacion->id_publicacion),
         ];
     }

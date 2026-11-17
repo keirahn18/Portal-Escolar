@@ -14,7 +14,7 @@
 
     @include('layouts.nav-publico')
 
-    <!-- 1. HERO INSTITUCIONAL -->
+    <!-- HERO INSTITUCIONAL -->
     <section id="inicio" class="relative bg-gradient-to-br from-sky-900 via-blue-900 to-slate-900 text-white overflow-hidden">
         <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:20px_20px]"></div>
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-20 relative z-10">
@@ -42,7 +42,7 @@
                 <!-- Tarjeta Lateral con Escudo Institucional -->
                 <div class="lg:col-span-4 flex justify-center">
                     <div class="bg-white/10 backdrop-blur-md border border-white/20 rounded-3xl p-8 text-center max-w-xs w-full shadow-2xl">
-                        <img src="{{ asset('images/logo.png') }}" alt="Escudo Institucional" class="h-32 w-auto mx-auto object-contain drop-shadow-md mb-4">
+                        <img src="{{ asset('images/logo.jpeg') }}" alt="Escudo Institucional" class="h-32 w-auto mx-auto object-contain drop-shadow-md mb-4">
                         <h2 class="font-bold text-lg text-white">E.P.E.P. N° 436</h2>
                         <p class="text-sky-200 text-xs font-medium mt-0.5">"Simón Bolívar"</p>
                         <div class="mt-4 pt-4 border-t border-white/15 text-xs text-slate-300 space-y-1">
@@ -107,7 +107,7 @@
                 <span class="text-xs font-bold uppercase tracking-widest text-sky-700">Actualidad Escolar</span>
                 <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-1">Noticias y Comunicados</h2>
                 <p class="text-slate-500 text-xs sm:text-sm mt-1">
-                    Mostrando {{ $publicaciones->firstItem() ?? 0 }} - {{ $publicaciones->lastItem() ?? 0 }} de {{ $publicaciones->total() }} publicaciones
+                    Mostrando {{ $publicaciones->firstItem() ?? 0 }} a {{ $publicaciones->lastItem() ?? 0 }} de {{ $publicaciones->total() }} publicaciones
                 </p>
             </div>
 
@@ -171,7 +171,7 @@
                         @endif
                         @else
                         <div class="h-full w-full bg-gradient-to-br from-sky-50 to-slate-100 flex flex-col items-center justify-center text-sky-800/60 p-4 text-center">
-                            <img src="{{ asset('images/logo.png') }}" alt="Logo" class="h-14 w-auto opacity-40 mb-2">
+                            <img src="{{ asset('images/logo.jpeg') }}" alt="Logo" class="h-14 w-auto opacity-40 mb-2">
                             <span class="text-xs font-semibold">Comunicado Institucional</span>
                         </div>
                         @endif
@@ -308,7 +308,7 @@
     <footer class="bg-slate-900 text-slate-300 mt-auto">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
             <div class="flex items-center gap-3.5">
-                <img src="{{ asset('images/logo.png') }}" alt="Escudo" class="h-12 w-auto bg-white p-1.5 rounded-xl">
+                <img src="{{ asset('images/logo.jpeg') }}" alt="Escudo" class="h-12 w-auto bg-white p-1.5 rounded-xl">
                 <div>
                     <span class="block font-bold text-white text-sm">E.P.E.P. N° 436 "Simón Bolívar"</span>
                     <span class="block text-xs text-slate-400">Formosa Capital, Provincia de Formosa</span>
@@ -327,6 +327,9 @@
             </div>
         </div>
     </footer>
+
+    <!-- CHATBOX INSTITUCIONAL FLOTANTE -->
+    <x-chatbox-portal />
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
