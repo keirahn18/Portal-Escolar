@@ -238,6 +238,13 @@
                 }
             });
             calendar.render();
+
+            if (window.Echo) {
+                window.Echo.channel('portal-escolar')
+                    .listen('.evento.actualizado', () => {
+                        calendar.refetchEvents();
+                    });
+            }
         });
 
         function toggleDocenteEncargado() {
@@ -315,9 +322,9 @@
                 if (infoCreador && textoCreador) {
                     textoCreador.textContent = props.creado_por;
                     badgeTipo.textContent = props.tipo;
-                    badgeTipo.className = props.es_interno
-                        ? 'text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800'
-                        : 'text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-sky-100 text-sky-800';
+                    badgeTipo.className = props.es_interno ?
+                        'text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-amber-100 text-amber-800' :
+                        'text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-sky-100 text-sky-800';
                     infoCreador.classList.remove('hidden');
                 }
 

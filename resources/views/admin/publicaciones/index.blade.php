@@ -30,13 +30,13 @@
             </div>
         @endif
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div id="admin-grid-noticias" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             @forelse ($publicaciones as $pub)
                 @php
                     $imagenes = $pub->bloques->where('tipo', 'imagen');
                     $primerTexto = $pub->bloques->where('tipo', 'texto')->first();
                 @endphp
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden flex flex-col justify-between hover:shadow-md transition">
+                <div data-admin-noticia-id="{{ $pub->id_publicacion }}" class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden flex flex-col justify-between hover:shadow-md transition">
                     <div>
                         <div class="relative h-48 bg-slate-100">
                             @if($imagenes->isNotEmpty())
@@ -91,7 +91,7 @@
                     </div>
                 </div>
             @empty
-                <div class="col-span-full bg-white rounded-2xl p-12 text-center text-slate-400 shadow-sm border border-slate-200/80">
+                <div id="admin-estado-vacio-noticias" class="col-span-full bg-white rounded-2xl p-12 text-center text-slate-400 shadow-sm border border-slate-200/80">
                     <p class="text-base font-semibold">Aún no hay noticias publicadas.</p>
                     <p class="text-xs mt-1">Hacé clic en "+ Nueva Noticia" para crear la primera publicación.</p>
                 </div>
@@ -103,6 +103,37 @@
     <footer class="text-center py-4 text-xs text-slate-400">
         E.P.E.P. N° 436 "Simón Bolívar" - Formosa
     </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            if (!window.Echo) return;
+
+            window.Echo.channel('portal-escolar')
+                .listen('.noticia.actualizada', (e) => {
+                    const grid = document.getElementById('admin-grid-noticias');
+                    if (!grid || !e.noticia) return;
+
+                    const noticia = e.noticia;
+                    const tarjeta = grid.querySelector(`[data-admin-noticia-id="${noticia.id}"]`);
+
+                    if (e.accion === 'eliminada') {
+                        if (tarjeta) tarjeta.remove();
+                        return;
+                    }
+
+                    // Si se creó o editó, recargamos solo la grilla vía fetch para mantener los permisos/botones exactos de cada rol
+                    fetch(window.location.href, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                        .then(res => res.text())
+                        .then(html => {
+                            const doc = new DOMParser().parseFromString(html, 'text/html');
+                            const nuevaGrilla = doc.getElementById('admin-grid-noticias');
+                            if (nuevaGrilla) {
+                                grid.innerHTML = nuevaGrilla.innerHTML;
+                            }
+                        });
+                });
+        });
+    </script>
 
 </body>
 </html>

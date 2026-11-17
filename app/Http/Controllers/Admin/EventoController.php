@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Events\EventoActualizado;
 use App\Http\Controllers\Controller;
 use App\Models\Evento;
 use App\Models\CatEvento;
 use App\Models\TipoEvento;
 use App\Models\Usuario;
 use App\Models\Institucion;
+use App\Notifications\EventoAsignadoDocente;
 use Illuminate\Http\Request;
 
 class EventoController extends Controller
@@ -107,7 +109,7 @@ class EventoController extends Controller
 
         $institucion = Institucion::first();
 
-        Evento::create([
+        $evento = Evento::create([
             'fk_usuario' => auth()->id(),
             'fk_id_cat_evento' => $request->fk_id_cat_evento,
             'fk_id_tipo_evento' => $idTipoFinal,
@@ -122,6 +124,17 @@ class EventoController extends Controller
             'estado' => 'activo',
         ]);
 
+        // Refrescar calendarios en tiempo real (público y panel)
+        event(new EventoActualizado('creado'));
+
+        // Notificar al docente encargado (bandeja de entrada + tiempo real)
+        if ($esInterno && $evento->fk_docente_encargado) {
+            $docente = Usuario::find($evento->fk_docente_encargado);
+            if ($docente) {
+                $docente->notify(new EventoAsignadoDocente($evento));
+            }
+        }
+
         return redirect()->route('admin.eventos.index')->with('status', '¡Evento agendado en el calendario!');
     }
 
@@ -134,6 +147,8 @@ class EventoController extends Controller
         if ($evento->tipo->tipo === 'Interno' && !$esAdmin) {
             abort(403, 'Solo la administración puede editar eventos internos.');
         }
+
+        $docenteAnterior = $evento->fk_docente_encargado;
 
         $tipoInterno = TipoEvento::where('tipo', 'Interno')->first();
         $tipoExterno = TipoEvento::where('tipo', 'Externo')->first();
@@ -164,6 +179,17 @@ class EventoController extends Controller
             'descripcion' => trim($request->descripcion),
         ]);
 
+        // Refrescar calendarios en tiempo real
+        event(new EventoActualizado('actualizado'));
+
+        // Notificar solo si es interno y se asignó o cambió el docente encargado
+        if ($esInterno && $evento->fk_docente_encargado && (int) $evento->fk_docente_encargado !== (int) $docenteAnterior) {
+            $docente = Usuario::find($evento->fk_docente_encargado);
+            if ($docente) {
+                $docente->notify(new EventoAsignadoDocente($evento));
+            }
+        }
+
         return redirect()->route('admin.eventos.index')->with('status', '¡Evento actualizado!');
     }
 
@@ -176,6 +202,9 @@ class EventoController extends Controller
         }
 
         $evento->delete();
+
+        // Refrescar calendarios en tiempo real
+        event(new EventoActualizado('eliminado'));
 
         return redirect()->route('admin.eventos.index')->with('status', '¡Evento eliminado del calendario!');
     }

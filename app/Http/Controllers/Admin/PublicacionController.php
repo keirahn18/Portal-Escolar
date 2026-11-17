@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Events\NoticiaActualizada;
 use App\Http\Controllers\Controller;
 use App\Models\Publicacion;
 use App\Models\PublicacionBloque;
@@ -20,11 +21,12 @@ class PublicacionController extends Controller
 
         return view('admin.publicaciones.index', compact('publicaciones'));
     }
+
     public function show($id)
-{
-    $publicacion = Publicacion::with(['usuario', 'categoria', 'bloques'])->findOrFail($id);
-    return view('admin.publicaciones.show', compact('publicacion'));
-}
+    {
+        $publicacion = Publicacion::with(['usuario', 'categoria', 'bloques'])->findOrFail($id);
+        return view('admin.publicaciones.show', compact('publicacion'));
+    }
 
     public function create()
     {
@@ -81,6 +83,11 @@ class PublicacionController extends Controller
             }
         }
 
+        // Transmitir en tiempo real al portal público (si está publicada) y al panel interno
+        $publicacion->load(['categoria', 'bloques']);
+        $accion = $publicacion->estado === 'publicado' ? 'publicada' : 'borrador';
+        event(new NoticiaActualizada($publicacion, $accion));
+
         return redirect()->route('admin.publicaciones.index')
             ->with('status', '¡Noticia publicada con éxito!');
     }
@@ -96,6 +103,7 @@ class PublicacionController extends Controller
     public function update(Request $request, $id)
     {
         $publicacion = Publicacion::findOrFail($id);
+        $estadoAnterior = $publicacion->estado;
 
         $request->validate([
             'titulo' => 'required|string|max:255',
@@ -169,13 +177,27 @@ class PublicacionController extends Controller
             $b->delete();
         }
 
+        // Transmitir cambio en tiempo real según su estado
+        $publicacion->load(['categoria', 'bloques']);
+        if ($publicacion->estado === 'publicado') {
+            $accion = $estadoAnterior === 'publicado' ? 'actualizada' : 'publicada';
+        } elseif ($estadoAnterior === 'publicado' && $publicacion->estado === 'borrador') {
+            $accion = 'eliminada';
+        } else {
+            $accion = 'borrador';
+        }
+        event(new NoticiaActualizada($publicacion, $accion));
+
         return redirect()->route('admin.publicaciones.index')
             ->with('status', '¡Noticia actualizada correctamente!');
     }
 
     public function destroy($id)
     {
-        $publicacion = Publicacion::findOrFail($id);
+        $publicacion = Publicacion::with(['categoria', 'bloques'])->findOrFail($id);
+
+        event(new NoticiaActualizada($publicacion, 'eliminada'));
+
         $publicacion->delete();
 
         return redirect()->route('admin.publicaciones.index')
