@@ -14,7 +14,6 @@
     <!-- Contenido Principal del Dashboard -->
     <main class="flex-grow p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
         
-        <!-- Alerta de mensaje (status) al guardar o editar -->
         @if (session('status'))
             <div class="bg-emerald-50 border-l-4 border-emerald-600 p-4 rounded-r-xl text-sm text-emerald-800 shadow-sm flex items-center justify-between">
                 <span>{{ session('status') }}</span>
@@ -72,6 +71,24 @@
                 <a href="{{ route('admin.usuarios.create') }}" 
                    class="inline-flex items-center justify-center w-full bg-slate-50 hover:bg-emerald-50 text-emerald-700 font-semibold py-2.5 rounded-xl border border-slate-200 hover:border-emerald-200 text-xs transition">
                     + Registrar Personal →
+                </a>
+            </div>
+
+            <!-- Tarjeta 3: Consultas de Familias -->
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200/80 hover:shadow-md transition flex flex-col justify-between space-y-4">
+                <div class="space-y-2">
+                    <div class="h-10 w-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-bold text-lg">
+                        💬
+                    </div>
+                    <h3 class="text-lg font-bold text-slate-800">Consultas de Familias</h3>
+                    <p class="text-xs text-slate-500 leading-relaxed">
+                        Atender chats en tiempo real con código de seguimiento y derivación entre docentes.
+                    </p>
+                </div>
+                
+                <a href="{{ route('panel.consultas.index') }}" 
+                   class="inline-flex items-center justify-center w-full bg-slate-50 hover:bg-amber-50 text-amber-700 font-semibold py-2.5 rounded-xl border border-slate-200 hover:border-amber-200 text-xs transition">
+                    Ir a Consultas →
                 </a>
             </div>
 

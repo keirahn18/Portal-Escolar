@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\UsuarioController;
 use App\Http\Controllers\Admin\PublicacionController;
 use App\Http\Controllers\Admin\EventoController;
 use App\Http\Controllers\ChatBotController;
+use App\Http\Controllers\DocenteConsultaController;
 use Illuminate\Support\Facades\Route;
 
 // ================= RUTAS PÚBLICAS (FAMILIAS Y COMUNIDAD) =================
@@ -56,6 +57,16 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
     Route::post('/eventos', [EventoController::class, 'store'])->name('admin.eventos.store');
     Route::put('/eventos/{id}', [EventoController::class, 'update'])->name('admin.eventos.update');
     Route::delete('/eventos/{id}', [EventoController::class, 'destroy'])->name('admin.eventos.destroy');
+
+    // Bandeja de Consultas en Tiempo Real (Docente / Admin)
+    Route::prefix('consultas')->name('panel.consultas.')->group(function () {
+        Route::get('/', [DocenteConsultaController::class, 'index'])->name('index');
+        Route::get('/feed', [DocenteConsultaController::class, 'feed'])->name('feed');
+        Route::get('/{consulta}/mensajes', [DocenteConsultaController::class, 'mensajes'])->name('mensajes');
+        Route::post('/{consulta}/responder', [DocenteConsultaController::class, 'responder'])->name('responder');
+        Route::patch('/{consulta}/derivar', [DocenteConsultaController::class, 'derivar'])->name('derivar');
+        Route::patch('/{consulta}/cerrar', [DocenteConsultaController::class, 'cerrar'])->name('cerrar');
+    });
 
     // Notificaciones y eventos en tiempo real
     Route::post('/notificaciones/{id}/leer', function ($id) {

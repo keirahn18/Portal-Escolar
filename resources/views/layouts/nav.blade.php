@@ -1,6 +1,12 @@
 @php
-    $noLeidas = auth()->user()->unreadNotifications;
-    $todasNotificaciones = auth()->user()->notifications()->take(12)->get();
+    $usuarioActual = auth()->user();
+    $noLeidas = $usuarioActual->unreadNotifications;
+    $todasNotificaciones = $usuarioActual->notifications()->take(12)->get();
+
+    $esAdminNav = method_exists($usuarioActual, 'esAdmin') && $usuarioActual->esAdmin();
+    $pendientesConsultas = \App\Models\Consulta::where('estado', 'pendiente')
+        ->when(!$esAdminNav, fn($q) => $q->where('fk_id_usuario', $usuarioActual->id_usuario))
+        ->count();
 @endphp
 
 <nav class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm" x-data="{ open: false }">
@@ -24,7 +30,7 @@
                         Dashboard
                     </a>
                     
-                    @if(auth()->user()->esAdmin())
+                    @if($esAdminNav)
                         <a href="{{ route('admin.usuarios.index') }}" 
                            class="px-3 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1.5 {{ request()->routeIs('admin.usuarios.index') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
                             <span>Gestión de Personal</span>
@@ -45,6 +51,15 @@
                     <a href="{{ route('admin.eventos.index') }}" 
                        class="px-3 py-2 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.eventos.*') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
                         Eventos
+                    </a>
+
+                    <a href="{{ route('panel.consultas.index') }}" 
+                       class="px-3 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1.5 {{ request()->routeIs('panel.consultas.*') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50' }}">
+                        <span>Consultas</span>
+                        <span id="badge-consultas-desktop"
+                              class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-900 leading-none {{ $pendientesConsultas > 0 ? '' : 'hidden' }}">
+                            {{ $pendientesConsultas }}
+                        </span>
                     </a>
                 </div>
             </div>
@@ -116,8 +131,8 @@
                 </div>
 
                 <div class="hidden sm:flex flex-col text-right">
-                    <span class="text-xs font-bold text-slate-800">{{ auth()->user()->nombre }} {{ auth()->user()->apellido }}</span>
-                    <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">{{ auth()->user()->rol->nombre }}</span>
+                    <span class="text-xs font-bold text-slate-800">{{ $usuarioActual->nombre }} {{ $usuarioActual->apellido }}</span>
+                    <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">{{ $usuarioActual->rol->nombre }}</span>
                 </div>
 
                 <div class="h-8 w-px bg-slate-200 hidden sm:block"></div>
@@ -149,8 +164,8 @@
     <div id="mobile-menu" class="hidden md:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-4 space-y-2 shadow-lg">
         <div class="pb-2 mb-2 border-b border-slate-100 flex items-center justify-between">
             <div>
-                <span class="block text-xs font-bold text-slate-800">{{ auth()->user()->nombre }} {{ auth()->user()->apellido }}</span>
-                <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">{{ auth()->user()->rol->nombre }}</span>
+                <span class="block text-xs font-bold text-slate-800">{{ $usuarioActual->nombre }} {{ $usuarioActual->apellido }}</span>
+                <span class="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">{{ $usuarioActual->rol->nombre }}</span>
             </div>
         </div>
 
@@ -159,7 +174,7 @@
             📌 Dashboard
         </a>
         
-        @if(auth()->user()->esAdmin())
+        @if($esAdminNav)
             <a href="{{ route('admin.usuarios.index') }}" 
                class="block px-3 py-2.5 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.usuarios.index') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' }}">
                 👥 Gestión de Personal
@@ -179,6 +194,15 @@
         <a href="{{ route('admin.eventos.index') }}" 
            class="block px-3 py-2.5 rounded-xl text-sm font-medium transition {{ request()->routeIs('admin.eventos.*') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' }}">
             📅 Agenda de Eventos
+        </a>
+
+        <a href="{{ route('panel.consultas.index') }}" 
+           class="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition {{ request()->routeIs('panel.consultas.*') ? 'bg-sky-50 text-sky-700 font-semibold' : 'text-slate-600 hover:bg-slate-50' }}">
+            <span>💬 Consultas de Familias</span>
+            <span id="badge-consultas-mobile"
+                  class="text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-amber-400 text-slate-900 {{ $pendientesConsultas > 0 ? '' : 'hidden' }}">
+                {{ $pendientesConsultas }}
+            </span>
         </a>
 
         <div class="pt-2 border-t border-slate-100">
@@ -209,7 +233,7 @@
 </div>
 
 <script>
-    const userIdActual = @json(auth()->user()->id_usuario);
+    const userIdActual = @json($usuarioActual->id_usuario);
 
     document.addEventListener('DOMContentLoaded', function () {
         // Cerrar bandeja al hacer clic fuera
@@ -225,18 +249,15 @@
         if (window.Echo && userIdActual) {
             window.Echo.private(`docente.${userIdActual}`)
                 .notification((notification) => {
-                    // 1. Mostrar Toast flotante en pantalla
                     const toast = document.getElementById('toast-notificacion');
                     document.getElementById('toast-notificacion-texto').textContent = notification.mensaje;
                     toast.classList.remove('hidden');
 
-                    // 2. Actualizar contador rojo de la campanita
                     const badge = document.getElementById('badge-notif-count');
                     const actual = parseInt(badge.textContent || '0', 10) + 1;
                     badge.textContent = actual;
                     badge.classList.remove('hidden');
 
-                    // 3. Insertar arriba de la bandeja de entrada
                     const vacio = document.getElementById('notif-vacio');
                     if (vacio) vacio.remove();
 
@@ -261,6 +282,26 @@
                     lista.prepend(item);
                 });
         }
+
+        // Actualizar contador de consultas pendientes en el navbar cada 4 segundos
+        setInterval(async () => {
+            try {
+                const res = await fetch("{{ route('panel.consultas.feed') }}", {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const pendientes = (data.consultas || []).filter(c => c.estado === 'pendiente').length;
+
+                ['badge-consultas-desktop', 'badge-consultas-mobile'].forEach(id => {
+                    const badge = document.getElementById(id);
+                    if (badge) {
+                        badge.textContent = pendientes;
+                        badge.classList.toggle('hidden', pendientes === 0);
+                    }
+                });
+            } catch (e) {}
+        }, 4000);
     });
 
     function marcarNotificacionLeida(id) {

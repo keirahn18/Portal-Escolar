@@ -14,6 +14,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class ChatBotController extends Controller
 {
@@ -29,7 +30,7 @@ class ChatBotController extends Controller
             $mensajeUsuario = trim($data['mensaje']);
 
             $apiKey = config('services.gemini.key') ?: env('GEMINI_API_KEY');
-            $modelo = config('services.gemini.model', 'gemini-2.5-flash');
+            $modelo = config('services.gemini.model') ?: env('GEMINI_MODEL', 'gemini-3.8-flash');
 
             if (!empty($apiKey)) {
                 $respuestaBruta = $this->consultarGemini($apiKey, $modelo, $contexto, $mensajeUsuario, $data['historial'] ?? []);
@@ -62,6 +63,24 @@ class ChatBotController extends Controller
 
     private function construirContextoInstitucional(): string
     {
+        $datosEscuela = "Escuela Provincial de Educación Primaria N° 436 \"Simón Bolívar\", Formosa Capital, Provincia de Formosa, Argentina.";
+        try {
+            $inst = Institucion::first();
+            if ($inst) {
+                $partes = array_filter([
+                    $inst->nombre ?? null,
+                    !empty($inst->direccion) ? "Dirección: {$inst->direccion}" : null,
+                    !empty($inst->telefono) ? "Teléfono: {$inst->telefono}" : null,
+                    !empty($inst->email) ? "Email: {$inst->email}" : null,
+                    !empty($inst->descripcion) ? $inst->descripcion : null,
+                ]);
+                if (!empty($partes)) {
+                    $datosEscuela = implode(' | ', $partes);
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+
         $faqs = '';
         try {
             if (class_exists(PreguntaFrecuente::class)) {
@@ -70,53 +89,237 @@ class ChatBotController extends Controller
                     ->implode("\n");
             }
         } catch (\Throwable $e) {
-            $faqs = '';
         }
 
-        $eventos = '';
+        $eventosPasados = '';
+        $eventosProximos = '';
+
         try {
             if (class_exists(Evento::class)) {
-                $eventos = Evento::whereDate('fecha', '>=', now()->toDateString())
-                    ->orderBy('fecha')
-                    ->take(6)
-                    ->get()
-                    ->map(fn($e) => "- " . Carbon::parse($e->fecha)->format('d/m/Y') . ": {$e->titulo}")
-                    ->implode("\n");
+                $tablaEv = (new Evento)->getTable();
+                $tieneTipo = Schema::hasColumn($tablaEv, 'tipo');
+                $hoy = now()->toDateString();
+
+                $formatearEvento = function ($e) {
+                    $fecha = Carbon::parse($e->fecha)->format('d/m/Y');
+                    $hora = !empty($e->hora_inicio) ? " ({$e->hora_inicio} hs)" : '';
+                    $lugar = !empty($e->lugar) ? " | Lugar: {$e->lugar}" : '';
+                    $desc = !empty($e->descripcion) ? " | Descripción: " . trim(strip_tags($e->descripcion)) : '';
+                    return "- Fecha: {$fecha}{$hora} — Título: \"{$e->titulo}\"{$lugar}{$desc}";
+                };
+
+                $qPasados = Evento::whereDate('fecha', '<', $hoy);
+                if ($tieneTipo) {
+                    $qPasados->whereIn('tipo', ['externo', 'publico']);
+                }
+                $eventosPasados = $qPasados->orderByDesc('fecha')->take(10)->get()->map($formatearEvento)->implode("\n");
+
+                $qProximos = Evento::whereDate('fecha', '>=', $hoy);
+                if ($tieneTipo) {
+                    $qProximos->whereIn('tipo', ['externo', 'publico']);
+                }
+                $eventosProximos = $qProximos->orderBy('fecha', 'asc')->take(15)->get()->map($formatearEvento)->implode("\n");
             }
         } catch (\Throwable $e) {
-            $eventos = '';
         }
 
         $noticias = '';
         try {
             if (class_exists(Publicacion::class)) {
-                $noticias = Publicacion::latest()->take(5)->get()
-                    ->map(fn($p) => "- {$p->titulo}")
+                $tablaPub = (new Publicacion)->getTable();
+                $queryPub = Publicacion::query();
+
+                if (Schema::hasColumn($tablaPub, 'estado')) {
+                    $queryPub->where('estado', 'publicado');
+                }
+                if (Schema::hasColumn($tablaPub, 'audiencia')) {
+                    $queryPub->whereIn('audiencia', ['publico', 'todos', 'ambos']);
+                }
+
+                $ordenCol = Schema::hasColumn($tablaPub, 'fecha_publicacion') ? 'fecha_publicacion' : 'created_at';
+
+                $noticias = $queryPub
+                    ->orderByDesc($ordenCol)
+                    ->take(15)
+                    ->get()
+                    ->map(function ($p, $idx) use ($ordenCol) {
+                        $fechaRaw = $p->{$ordenCol} ?? null;
+                        $fecha = $fechaRaw ? Carbon::parse($fechaRaw)->format('d/m/Y') : 'Sin fecha';
+                        $cuerpoRaw = $p->contenido ?? $p->cuerpo ?? $p->descripcion ?? '';
+                        $cuerpo = trim(preg_replace('/\s+/', ' ', strip_tags($cuerpoRaw)));
+                        $etiqueta = $idx === 0 ? ' [MÁS RECIENTE]' : '';
+                        return "- Fecha de publicación: {$fecha}{$etiqueta} — Título: \"{$p->titulo}\" | Contenido: " . ($cuerpo ?: 'Sin descripción adicional.');
+                    })
                     ->implode("\n");
             }
         } catch (\Throwable $e) {
-            $noticias = '';
         }
 
+        $hoyTexto = now()->format('d/m/Y');
+
         return <<<TXT
-Sos el asistente virtual oficial de la Escuela Provincial de Educación Primaria N° 436 "Simón Bolívar", ubicada en Formosa Capital, Provincia de Formosa, Argentina.
-Mantené una conversación natural, cálida, empática y variable en español rioplatense. No uses frases robóticas ni repitas siempre lo mismo.
+Sos el asistente virtual oficial de la {$datosEscuela}.
+Hoy es {$hoyTexto}.
+Respondé en español rioplatense cordial, directo y bien específico.
 
-REGLAS DE CONVERSACIÓN Y DERIVACIÓN:
-1. Respondé basándote únicamente en la información institucional que tenés abajo y los datos básicos de la escuela (ubicada en Formosa Capital, Provincia de Formosa, nivel primario, turnos mañana y tarde). No inventes nombres de docentes, notas ni vacantes puntuales.
-2. Si la persona saluda o hace una consulta general que SÍ podés responder con esta información, respondé de forma natural y conversacional sin cortar la charla.
-3. Si detectás que NO podés resolver la consulta (por ejemplo: preguntan por un alumno en particular, notas, faltas, vacantes exactas, entrevistas con un docente, o cualquier dato que no tenés), aclaralo con amabilidad, preguntale si pudiste resolver sus dudas o si prefiere comunicarse con personal docente de la escuela, y agregá exactamente la etiqueta [DERIVAR] al final de tu mensaje.
-4. Nunca muestres la etiqueta [DERIVAR] en medio de una oración; ponela siempre al final cuando corresponda ofrecer contacto humano.
+REGLAS ESTRICTAS DE PRECISIÓN:
+1. Respondé exactamente lo que pregunta el usuario, dando todos los detalles disponibles (título, fecha, hora, lugar y contenido/descripción).
+2. Si te preguntan por una FECHA específica (ej: "19/11/2026", "19 de noviembre", "qué hay el viernes", "noticias del 15/11"), buscá en EVENTOS PRÓXIMOS, EVENTOS YA REALIZADOS y NOTICIAS PUBLICADAS todo lo que coincida con esa fecha y detallalo con título, horario, lugar y descripción/contenido. Si no hay nada registrado para esa fecha, indicalo con claridad.
+3. Si te preguntan por "la última noticia", mencioná específicamente la marcada como [MÁS RECIENTE] con su fecha y explicá de qué trata según su contenido.
+4. Si te preguntan por "el último evento que se hizo" o eventos pasados, fijate en EVENTOS YA REALIZADOS y respondé el más reciente con su fecha y detalle. Si esa lista está vacía, aclaralo y comentá cuál es el próximo evento programado.
+5. Nunca inventes información que no esté en los datos de abajo.
+6. ÚNICAMENTE cuando NO tengas la respuesta en los datos de abajo (por ejemplo: notas de un alumno, vacantes exactas, hablar con una maestra) o si el usuario pide contacto humano, preguntá amablemente si pudo resolver sus dudas o si prefiere comunicarse con personal de la escuela y agregá [DERIVAR] al final. Si pudiste responder con los datos de la escuela, NO agregues [DERIVAR].
 
-INFORMACIÓN INSTITUCIONAL Y PREGUNTAS FRECUENTES:
+DATOS DE LA INSTITUCIÓN:
+{$datosEscuela}
+
+PREGUNTAS FRECUENTES:
 {$faqs}
 
-PRÓXIMOS EVENTOS DEL CALENDARIO ESCOLAR:
-{$eventos}
+EVENTOS YA REALIZADOS (DEL MÁS RECIENTE AL MÁS ANTIGUO):
+{$eventosPasados}
 
-ÚLTIMAS NOTICIAS PUBLICADAS:
+EVENTOS PRÓXIMOS EN EL CALENDARIO ESCOLAR:
+{$eventosProximos}
+
+NOTICIAS PUBLICADAS (ORDENADAS DE LA MÁS RECIENTE A LA MÁS ANTIGUA):
 {$noticias}
 TXT;
+    }
+
+    private function responderDesdeContextoLocal(string $mensaje): string
+    {
+        $texto = mb_strtolower($mensaje);
+
+        try {
+            // 1. Si pregunta por una fecha puntual (ej: 19/11/2026, 19-11, 19 de noviembre)
+            $fechaBuscada = $this->extraerFechaDeTexto($texto);
+            if ($fechaBuscada) {
+                $fechaFormateada = $fechaBuscada->format('d/m/Y');
+                $fechaSql = $fechaBuscada->toDateString();
+
+                $eventosFecha = Evento::whereDate('fecha', $fechaSql)->get();
+                $noticiasFecha = Publicacion::where('estado', 'publicado')
+                    ->whereDate('fecha_publicacion', $fechaSql)
+                    ->get();
+
+                $partes = [];
+
+                if ($eventosFecha->isNotEmpty()) {
+                    $listaEv = $eventosFecha->map(function ($e) {
+                        $hora = !empty($e->hora_inicio) ? " ({$e->hora_inicio} hs)" : '';
+                        $lugar = !empty($e->lugar) ? " en {$e->lugar}" : '';
+                        $desc = !empty($e->descripcion) ? ": " . trim(strip_tags($e->descripcion)) : '';
+                        return "• Evento: \"{$e->titulo}\"{$hora}{$lugar}{$desc}";
+                    })->implode("\n");
+                    $partes[] = $listaEv;
+                }
+
+                if ($noticiasFecha->isNotEmpty()) {
+                    $listaNot = $noticiasFecha->map(function ($n) {
+                        $cuerpo = trim(strip_tags($n->contenido ?? $n->descripcion ?? ''));
+                        return "• Noticia: \"{$n->titulo}\"" . ($cuerpo ? ": {$cuerpo}" : '');
+                    })->implode("\n");
+                    $partes[] = $listaNot;
+                }
+
+                if (!empty($partes)) {
+                    return "Para el {$fechaFormateada} encontramos lo siguiente:\n" . implode("\n", $partes);
+                }
+
+                return "No hay eventos ni noticias registradas para el {$fechaFormateada}.";
+            }
+
+            // 2. Si pregunta por el último evento realizado
+            if ((str_contains($texto, 'ultimo') || str_contains($texto, 'último') || str_contains($texto, 'hizo') || str_contains($texto, 'pasado'))
+                && str_contains($texto, 'evento')
+            ) {
+                $ultimoPasado = Evento::whereDate('fecha', '<', now()->toDateString())
+                    ->orderByDesc('fecha')
+                    ->first();
+
+                if ($ultimoPasado) {
+                    $fecha = Carbon::parse($ultimoPasado->fecha)->format('d/m/Y');
+                    $desc = !empty($ultimoPasado->descripcion) ? "\nDetalle: " . strip_tags($ultimoPasado->descripcion) : '';
+                    return "El último evento realizado fue \"{$ultimoPasado->titulo}\" el {$fecha}.{$desc}";
+                }
+
+                $proximo = Evento::whereDate('fecha', '>=', now()->toDateString())->orderBy('fecha')->first();
+                return $proximo
+                    ? "Todavía no hay eventos pasados registrados; el próximo evento programado es \"{$proximo->titulo}\" el " . Carbon::parse($proximo->fecha)->format('d/m/Y') . "."
+                    : "No hay eventos registrados en el calendario en este momento.";
+            }
+
+            // 3. Si pregunta por la última noticia
+            if ((str_contains($texto, 'ultima') || str_contains($texto, 'última')) && str_contains($texto, 'noticia')) {
+                $ultima = Publicacion::where('estado', 'publicado')->latest('fecha_publicacion')->first();
+                if ($ultima) {
+                    $fecha = $ultima->fecha_publicacion ? ' (' . Carbon::parse($ultima->fecha_publicacion)->format('d/m/Y') . ')' : '';
+                    $cuerpo = trim(strip_tags($ultima->contenido ?? $ultima->descripcion ?? ''));
+                    return "La última noticia publicada{$fecha} es \"{$ultima->titulo}\"" . ($cuerpo ? ":\n{$cuerpo}" : '.');
+                }
+            }
+
+            // 4. Preguntas frecuentes por palabras clave
+            $faqs = PreguntaFrecuente::where('activo', true)->get();
+            foreach ($faqs as $faq) {
+                $claves = array_filter(array_map('trim', explode(',', mb_strtolower($faq->palabras_clave ?? ''))));
+                foreach ($claves as $palabra) {
+                    if ($palabra !== '' && str_contains($texto, $palabra)) {
+                        return $faq->respuesta;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+        }
+
+        return 'Soy el asistente de la E.P.E.P. N° 436 "Simón Bolívar" (Formosa Capital). Podés consultarme por horarios, fechas específicas, noticias recientes o eventos del calendario escolar.';
+    }
+
+    private function extraerFechaDeTexto(string $texto): ?Carbon
+    {
+        if (str_contains($texto, 'hoy')) {
+            return now();
+        }
+        if (str_contains($texto, 'mañana') && !str_contains($texto, 'turno mañana')) {
+            return now()->addDay();
+        }
+
+        if (preg_match('/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/', $texto, $m)) {
+            $dia = (int) $m[1];
+            $mes = (int) $m[2];
+            $anio = !empty($m[3]) ? (strlen($m[3]) === 2 ? 2000 + (int) $m[3] : (int) $m[3]) : now()->year;
+            if (checkdate($mes, $dia, $anio)) {
+                return Carbon::create($anio, $mes, $dia);
+            }
+        }
+
+        $meses = [
+            'enero' => 1,
+            'febrero' => 2,
+            'marzo' => 3,
+            'abril' => 4,
+            'mayo' => 5,
+            'junio' => 6,
+            'julio' => 7,
+            'agosto' => 8,
+            'septiembre' => 9,
+            'setiembre' => 9,
+            'octubre' => 10,
+            'noviembre' => 11,
+            'diciembre' => 12,
+        ];
+
+        if (preg_match('/\b(\d{1,2})\s+de\s+([a-záéíóú]+)(?:\s+de[l]?\s+(\d{4}))?\b/u', $texto, $m)) {
+            $dia = (int) $m[1];
+            $mesNombre = $m[2];
+            $anio = !empty($m[3]) ? (int) $m[3] : now()->year;
+            if (isset($meses[$mesNombre]) && checkdate($meses[$mesNombre], $dia, $anio)) {
+                return Carbon::create($anio, $meses[$mesNombre], $dia);
+            }
+        }
+
+        return null;
     }
 
     private function consultarGemini(string $apiKey, string $modelo, string $contexto, string $mensaje, array $historial): ?string
@@ -158,27 +361,6 @@ TXT;
         return null;
     }
 
-    private function responderDesdeContextoLocal(string $mensaje): string
-    {
-        try {
-            $texto = mb_strtolower($mensaje);
-            $faqs = PreguntaFrecuente::where('activo', true)->get();
-
-            foreach ($faqs as $faq) {
-                $claves = array_filter(array_map('trim', explode(',', mb_strtolower($faq->palabras_clave ?? ''))));
-                foreach ($claves as $palabra) {
-                    if ($palabra !== '' && str_contains($texto, $palabra)) {
-                        return $faq->respuesta;
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            // Ignora fallo de tabla local y devuelve respuesta base
-        }
-
-        return 'Soy el asistente de la E.P.E.P. N° 436 "Simón Bolívar", ubicada en Formosa Capital. Puedo ayudarte con información sobre horarios, inscripciones, constancias y eventos escolares.';
-    }
-
     public function derivar(Request $request)
     {
         $data = $request->validate([
@@ -195,8 +377,8 @@ TXT;
             ]);
 
             $docenteAsignado = Usuario::whereHas('rol', function ($query) {
-                    $query->whereRaw('LOWER(nombre) = ?', ['docente']);
-                })
+                $query->whereRaw('LOWER(nombre) = ?', ['docente']);
+            })
                 ->withCount(['consultasAsignadas' => function ($query) {
                     $query->whereIn('estado', ['pendiente', 'en_atencion']);
                 }])
@@ -273,15 +455,18 @@ TXT;
             'responsable' => $consulta->docenteAsignado
                 ? "Prof. {$consulta->docenteAsignado->nombre} {$consulta->docenteAsignado->apellido}"
                 : 'Equipo Docente',
-            'mensajes'    => $consulta->mensajes->map(fn($m) => [
-                'id'        => $m->id_mensaje_consulta,
-                'emisor'    => $m->emisor,
-                'autor'     => $m->emisor === 'docente' && $m->usuario
-                    ? "Prof. {$m->usuario->nombre} {$m->usuario->apellido}"
-                    : $consulta->nombre_consultante,
-                'contenido' => $m->contenido,
-                'fecha'     => $m->fecha->format('d/m/Y H:i'),
-            ]),
+            'mensajes'    => $consulta->mensajes
+                ->filter(fn($m) => $m->contenido !== '(Iniciando consulta con docente)')
+                ->values()
+                ->map(fn($m) => [
+                    'id'        => $m->id_mensaje_consulta,
+                    'emisor'    => $m->emisor,
+                    'autor'     => $m->emisor === 'docente' && $m->usuario
+                        ? "Prof. {$m->usuario->nombre} {$m->usuario->apellido}"
+                        : $consulta->nombre_consultante,
+                    'contenido' => $m->contenido,
+                    'fecha'     => $m->fecha->format('d/m/Y H:i'),
+                ]),
         ]);
     }
 
@@ -291,34 +476,50 @@ TXT;
             'contenido' => 'required|string|max:2000',
         ]);
 
-        $consulta = Consulta::where('codigo_seguimiento', strtoupper(trim($codigo)))->firstOrFail();
+        try {
+            $consulta = Consulta::where('codigo_seguimiento', strtoupper(trim($codigo)))->first();
 
-        if ($consulta->estado === 'cerrada') {
+            if (!$consulta) {
+                return response()->json([
+                    'ok'      => false,
+                    'mensaje' => 'No se encontró la consulta con ese código de seguimiento.',
+                ], 404);
+            }
+
+            if ($consulta->estado === 'cerrada') {
+                return response()->json([
+                    'ok'      => false,
+                    'mensaje' => 'Esta consulta ya fue cerrada. Si necesitás hacer otra pregunta, iniciá una nueva conversación.',
+                ], 422);
+            }
+
+            $mensaje = MensajeConsulta::create([
+                'fk_id_consulta' => $consulta->id_consulta,
+                'fk_id_usuario'  => null,
+                'emisor'         => 'familia',
+                'contenido'      => trim($data['contenido']),
+                'fecha'          => now(),
+            ]);
+
+            $consulta->update(['estado' => 'pendiente']);
+
+            return response()->json([
+                'ok'      => true,
+                'mensaje' => [
+                    'id'        => $mensaje->id_mensaje_consulta,
+                    'emisor'    => 'familia',
+                    'autor'     => $consulta->nombre_consultante,
+                    'contenido' => $mensaje->contenido,
+                    'fecha'     => $mensaje->fecha->format('d/m/Y H:i'),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error en ChatBotController@responderFamilia: ' . $e->getMessage());
+
             return response()->json([
                 'ok'      => false,
-                'mensaje' => 'Esta consulta ya fue cerrada. Si necesitás hacer otra pregunta, iniciá una nueva conversación.',
-            ], 422);
+                'mensaje' => 'Error interno al guardar el mensaje: ' . $e->getMessage(),
+            ], 500);
         }
-
-        $mensaje = MensajeConsulta::create([
-            'fk_id_consulta' => $consulta->id_consulta,
-            'fk_id_usuario'  => null,
-            'emisor'         => 'familia',
-            'contenido'      => trim($data['contenido']),
-            'fecha'          => now(),
-        ]);
-
-        $consulta->update(['estado' => 'pendiente']);
-
-        return response()->json([
-            'ok'      => true,
-            'mensaje' => [
-                'id'        => $mensaje->id_mensaje_consulta,
-                'emisor'    => 'familia',
-                'autor'     => $consulta->nombre_consultante,
-                'contenido' => $mensaje->contenido,
-                'fecha'     => $mensaje->fecha->format('d/m/Y H:i'),
-            ],
-        ]);
     }
 }

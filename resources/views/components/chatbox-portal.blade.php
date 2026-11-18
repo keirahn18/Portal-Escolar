@@ -12,7 +12,8 @@
                 <div>
                     <h4 class="text-xs font-extrabold">Asistente E.P.E.P. N° 436</h4>
                     <p class="text-[11px] text-sky-200 flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span> En línea
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span id="estado-cabecera-chat">En línea</span>
                     </p>
                 </div>
             </div>
@@ -46,9 +47,10 @@
 
     <!-- ÍCONO FLOTANTE CIRCULAR (Lo único visible al cargar la página) -->
     <button type="button" id="btn-toggle-chat" title="Abrir asistente escolar"
-        class="h-14 w-14 rounded-full bg-sky-700 hover:bg-sky-800 text-white shadow-xl flex items-center justify-center transition transform hover:scale-105 cursor-pointer">
+        class="relative h-14 w-14 rounded-full bg-sky-700 hover:bg-sky-800 text-white shadow-xl flex items-center justify-center transition transform hover:scale-105 cursor-pointer">
         <span id="icono-chat-abierto" class="text-2xl">💬</span>
         <span id="icono-chat-cerrado" class="hidden text-2xl font-bold">&times;</span>
+        <span id="badge-nuevo-mensaje-portal" class="hidden absolute -top-1 -right-1 h-4 w-4 rounded-full bg-amber-400 border-2 border-white animate-bounce"></span>
     </button>
 </div>
 
@@ -60,14 +62,31 @@
         const btnReiniciar = document.getElementById('btn-reiniciar-chat');
         const iconoAbrir = document.getElementById('icono-chat-abierto');
         const iconoCerrar = document.getElementById('icono-chat-cerrado');
+        const badgeNuevo = document.getElementById('badge-nuevo-mensaje-portal');
+        const estadoCabecera = document.getElementById('estado-cabecera-chat');
         const historial = document.getElementById('chat-historial');
         const form = document.getElementById('form-chat-input');
         const input = document.getElementById('input-chat-mensaje');
         const btnEnviar = document.getElementById('btn-enviar-chat');
 
-        const CSRF = '{{ csrf_token() }}';
+        let csrfTokenActual = '{{ csrf_token() }}';
         const URL_PREGUNTAR = "{{ route('portal.chat.preguntar') }}";
         const URL_DERIVAR = "{{ route('portal.chat.derivar') }}";
+
+        // Lee el token actualizado desde la cookie XSRF-TOKEN de Laravel (evita errores 419 al cambiar de sesión)
+        function obtenerHeadersPost() {
+            const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+            if (match) {
+                headers['X-XSRF-TOKEN'] = decodeURIComponent(match[1]);
+            } else {
+                headers['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]')?.content || csrfTokenActual;
+            }
+            return headers;
+        }
 
         // Estados posibles:
         // 'menu_inicial' | 'esperando_codigo' | 'chat_ia' | 'pedir_nombre' | 'pedir_contacto' | 'pedir_pregunta_docente' | 'hilo_docente'
@@ -79,14 +98,20 @@
             asunto: 'Consulta desde el portal'
         };
         let codigoSeguimiento = '';
+        let idsMensajesRenderizados = new Set();
+        let estadoConsultaServidor = null;
 
         function abrirChat() {
             ventana.classList.remove('hidden');
             ventana.classList.add('flex');
             iconoAbrir.classList.add('hidden');
             iconoCerrar.classList.remove('hidden');
+            badgeNuevo.classList.add('hidden');
+
             if (historial.innerHTML.trim() === '') {
                 iniciarMenu();
+            } else if (estado === 'hilo_docente' && codigoSeguimiento) {
+                sincronizarHiloConsultor(true);
             }
         }
 
@@ -123,9 +148,15 @@
             historial.scrollTop = historial.scrollHeight;
         }
 
-        function agregarMensaje(emisor, htmlTexto, autor = '') {
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str ?? '';
+            return div.innerHTML;
+        }
+
+        function agregarMensaje(emisor, htmlTexto, autor = '', esDeHilo = false) {
             const wrapper = document.createElement('div');
-            wrapper.className = emisor === 'usuario' ? 'flex justify-end' : 'flex justify-start';
+            wrapper.className = (emisor === 'usuario' ? 'flex justify-end' : 'flex justify-start') + (esDeHilo ? ' msg-hilo' : '');
 
             const burbuja = document.createElement('div');
             burbuja.className = emisor === 'usuario' ?
@@ -175,6 +206,9 @@
             historial.innerHTML = '';
             historialIa = [];
             codigoSeguimiento = '';
+            idsMensajesRenderizados.clear();
+            estadoConsultaServidor = null;
+            estadoCabecera.textContent = 'En línea';
             datosDerivacion = {
                 nombre: '',
                 contacto: '',
@@ -214,10 +248,11 @@
             if (!texto) return;
             input.value = '';
 
-            // Quitar botones previos si quedaban visibles
             document.querySelectorAll('.opciones-chat').forEach(el => el.remove());
 
-            agregarMensaje('usuario', texto);
+            if (estado !== 'hilo_docente' && estado !== 'pedir_pregunta_docente') {
+                agregarMensaje('usuario', escapeHtml(texto));
+            }
 
             // 1. BUSCAR CÓDIGO DE SEGUIMIENTO
             if (estado === 'esperando_codigo') {
@@ -240,7 +275,7 @@
             if (estado === 'pedir_nombre') {
                 datosDerivacion.nombre = texto;
                 estado = 'pedir_contacto';
-                agregarMensaje('bot', `Gracias, <strong>${texto}</strong>. Ahora ingresá tu email o teléfono de contacto:`);
+                agregarMensaje('bot', `Gracias, <strong>${escapeHtml(texto)}</strong>. Ahora ingresá tu email o teléfono de contacto:`);
                 habilitarInput('Ej: nombre@gmail.com o 3704...');
                 return;
             }
@@ -271,11 +306,7 @@
             try {
                 const res = await fetch(URL_PREGUNTAR, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': CSRF,
-                        'Accept': 'application/json'
-                    },
+                    headers: obtenerHeadersPost(),
                     body: JSON.stringify({
                         mensaje: texto,
                         historial: historialIa.slice(-12)
@@ -291,7 +322,6 @@
                 });
                 agregarMensaje('bot', respuesta);
 
-                // Solo muestra los botones cuando la propia IA detecta que no pudo resolverlo
                 if (data.ofrecer_asistente) {
                     agregarBotonesOpciones([{
                             texto: '✅ Sí, pude resolver mis dudas',
@@ -332,77 +362,90 @@
         }
 
         async function generarTicketYPedirPregunta() {
-        deshabilitarInput('Generando código de seguimiento...');
-        try {
-            const res = await fetch(URL_DERIVAR, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': CSRF,
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    nombre_consultante: datosDerivacion.nombre,
-                    contacto: datosDerivacion.contacto,
-                    asunto: datosDerivacion.asunto || 'Consulta desde el portal',
-                    contenido: '(Iniciando consulta con docente)'
-                })
-            });
-            const data = await res.json();
-
-            if (!res.ok || !data.ok || !data.codigo) {
-                const detalle = data.error || data.message || 'Error al registrar la consulta.';
-                agregarMensaje('bot', `⚠️ No se pudo generar el código: ${detalle}`);
-                habilitarInput('Escribí nuevamente tu contacto para reintentar...');
-                return;
-            }
-
-            codigoSeguimiento = data.codigo;
-            estado = 'pedir_pregunta_docente';
-
-            agregarMensaje(
-                'bot',
-                `✅ Tu código de seguimiento es: <strong class="text-sky-700 text-sm">${codigoSeguimiento}</strong> (asignado a <strong>${data.asignado_a}</strong>).\n\nAhora sí, <strong>escribí tu pregunta</strong> para el asistente:`
-            );
-            habilitarInput('Escribí tu pregunta para el docente...');
-        } catch (err) {
-            agregarMensaje('bot', '⚠️ No se pudo conectar con el servidor. Intentá nuevamente.');
-            habilitarInput('Reintentar...');
-        }
-    }
-
-        async function enviarMensajeAlHilo(texto, esPrimeraPregunta) {
-            deshabilitarInput('Enviando mensaje...');
+            deshabilitarInput('Generando código de seguimiento...');
             try {
-                const res = await fetch(`/portal/chat/seguimiento/${encodeURIComponent(codigoSeguimiento)}/responder`, {
+                const res = await fetch(URL_DERIVAR, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': CSRF,
-                        'Accept': 'application/json'
-                    },
+                    headers: obtenerHeadersPost(),
                     body: JSON.stringify({
-                        contenido: texto
+                        nombre_consultante: datosDerivacion.nombre,
+                        contacto: datosDerivacion.contacto,
+                        asunto: datosDerivacion.asunto || 'Consulta desde el portal',
+                        contenido: '(Iniciando consulta con docente)'
                     })
                 });
                 const data = await res.json();
 
-                if (!data.ok) {
-                    agregarMensaje('bot', data.mensaje || 'No se pudo enviar el mensaje.');
-                    deshabilitarInput('Consulta cerrada');
+                if (!res.ok || !data.ok || !data.codigo) {
+                    const detalle = data.error || data.message || 'Error al registrar la consulta.';
+                    agregarMensaje('bot', `⚠️ No se pudo generar el código: ${escapeHtml(detalle)}`);
+                    habilitarInput('Escribí nuevamente tu contacto para reintentar...');
                     return;
                 }
 
+                codigoSeguimiento = data.codigo;
+                estado = 'pedir_pregunta_docente';
+                estadoCabecera.textContent = `Ticket ${codigoSeguimiento}`;
+
+                agregarMensaje(
+                    'bot',
+                    `✅ Tu código de seguimiento es: <strong class="text-sky-700 text-sm">${escapeHtml(codigoSeguimiento)}</strong> (asignado a <strong>${escapeHtml(data.asignado_a)}</strong>).\n\nAhora sí, <strong>escribí tu pregunta</strong> para el asistente:`
+                );
+                habilitarInput('Escribí tu pregunta para el docente...');
+            } catch (err) {
+                agregarMensaje('bot', '⚠️ No se pudo conectar con el servidor. Intentá nuevamente.');
+                habilitarInput('Reintentar...');
+            }
+        }
+
+        async function enviarMensajeAlHilo(texto, esPrimeraPregunta, reintentado = false) {
+            deshabilitarInput('Enviando mensaje...');
+            try {
+                const res = await fetch(`/portal/chat/seguimiento/${encodeURIComponent(codigoSeguimiento)}/responder`, {
+                    method: 'POST',
+                    headers: obtenerHeadersPost(),
+                    body: JSON.stringify({
+                        contenido: texto
+                    })
+                });
+
+                // Si la sesión renovó su CSRF (419), refrescamos cookies mediante GET y reintentamos 1 vez automáticamente
+                if (res.status === 419 && !reintentado) {
+                    await fetch(`/portal/chat/seguimiento/${encodeURIComponent(codigoSeguimiento)}`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    return await enviarMensajeAlHilo(texto, esPrimeraPregunta, true);
+                }
+
+                const data = await res.json();
+
+                if (!res.ok || !data.ok) {
+                    if (res.status === 422) {
+                        estadoConsultaServidor = 'cerrada';
+                        agregarMensaje('bot', escapeHtml(data.mensaje || 'Esta consulta ya fue cerrada.'));
+                        deshabilitarInput('Consulta cerrada');
+                    } else {
+                        agregarMensaje('bot', escapeHtml(data.mensaje || data.message || 'No se pudo enviar el mensaje. Intentá de nuevo.'));
+                        habilitarInput('Escribí tu mensaje nuevamente...');
+                    }
+                    return;
+                }
+
+                estado = 'hilo_docente';
+                await sincronizarHiloConsultor(true);
+
                 if (esPrimeraPregunta) {
-                    estado = 'hilo_docente';
                     agregarMensaje(
                         'bot',
-                        `📩 ¡Listo! Tu consulta fue enviada. El asistente te estará respondiendo a la brevedad.\n\nSi cerrás la página y querés ver la respuesta más tarde, volvé al chat e ingresá tu código de seguimiento: <strong class="text-sky-700">${codigoSeguimiento}</strong>.`
+                        `📩 ¡Listo! Tu consulta fue enviada. Si el docente responde mientras tenés esta ventana abierta, lo vas a ver aquí al instante.\n\nSi cerrás la página y volvés más tarde, ingresá tu código: <strong class="text-sky-700">${escapeHtml(codigoSeguimiento)}</strong>.`
                     );
                 }
-                habilitarInput('Escribí otro mensaje para el docente...');
+
+                if (estadoConsultaServidor !== 'cerrada') {
+                    habilitarInput('Escribí otro mensaje para el docente...');
+                }
             } catch (err) {
-                agregarMensaje('bot', '⚠️ Error al enviar el mensaje.');
+                agregarMensaje('bot', '⚠️ Error de conexión al enviar el mensaje. Intentá nuevamente.');
                 habilitarInput('Escribí tu mensaje...');
             }
         }
@@ -410,9 +453,11 @@
         async function consultarCodigo(codigo) {
             deshabilitarInput('Buscando código...');
             try {
-                const res = await fetch(`/portal/chat/seguimiento/${encodeURIComponent(codigo)}`);
+                const res = await fetch(`/portal/chat/seguimiento/${encodeURIComponent(codigo)}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
                 if (!res.ok) {
-                    agregarMensaje('bot', `❌ No encontré ninguna consulta con el código <strong>${codigo}</strong>. Verificalo e ingresalo de nuevo:`);
+                    agregarMensaje('bot', `❌ No encontré ninguna consulta con el código <strong>${escapeHtml(codigo)}</strong>. Verificalo e ingresalo de nuevo:`);
                     habilitarInput('Ingresá tu código de seguimiento...');
                     return;
                 }
@@ -420,15 +465,24 @@
                 const data = await res.json();
                 codigoSeguimiento = data.codigo;
                 estado = 'hilo_docente';
+                estadoConsultaServidor = data.estado;
+                idsMensajesRenderizados.clear();
+                estadoCabecera.textContent = `Ticket ${codigoSeguimiento} • En vivo`;
 
                 agregarMensaje(
                     'bot',
-                    `📋 <strong>Consulta ${data.codigo}</strong>\nDocente asignado: <strong>${data.responsable}</strong> | Estado: <strong class="uppercase">${data.estado}</strong>`
+                    `📋 <strong>Consulta ${escapeHtml(data.codigo)}</strong>\nDocente asignado: <strong>${escapeHtml(data.responsable)}</strong> | Estado: <strong class="uppercase">${escapeHtml(data.estado)}</strong>`
                 );
 
-                data.mensajes.forEach(m => {
+                (data.mensajes || []).forEach(m => {
                     if (m.contenido !== '(Iniciando consulta con docente)') {
-                        agregarMensaje(m.emisor === 'familia' ? 'usuario' : 'bot', m.contenido, `${m.autor} • ${m.fecha}`);
+                        if (m.id) idsMensajesRenderizados.add(Number(m.id));
+                        agregarMensaje(
+                            m.emisor === 'familia' ? 'usuario' : 'bot',
+                            escapeHtml(m.contenido),
+                            `${m.autor} • ${m.fecha}`,
+                            true
+                        );
                     }
                 });
 
@@ -442,5 +496,61 @@
                 habilitarInput('Ingresá tu código...');
             }
         }
+
+        // =========================================================================
+        // POLLING EN TIEMPO REAL DEL HILO DEL CONSULTOR (CADA 3 SEGUNDOS)
+        // =========================================================================
+        async function sincronizarHiloConsultor(forzar = false) {
+            if (estado !== 'hilo_docente' || !codigoSeguimiento) return;
+
+            try {
+                const res = await fetch(`/portal/chat/seguimiento/${encodeURIComponent(codigoSeguimiento)}`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (!res.ok) return;
+
+                const data = await res.json();
+                const validos = (data.mensajes || []).filter(
+                    m => m.contenido !== '(Iniciando consulta con docente)'
+                );
+
+                let llegoRespuestaDocente = false;
+                validos.forEach((m, idx) => {
+                    const clave = m.id ? Number(m.id) : `${m.emisor}-${m.fecha}-${idx}`;
+                    if (!idsMensajesRenderizados.has(clave)) {
+                        idsMensajesRenderizados.add(clave);
+                        agregarMensaje(
+                            m.emisor === 'familia' ? 'usuario' : 'bot',
+                            escapeHtml(m.contenido),
+                            `${m.autor} • ${m.fecha}`,
+                            true
+                        );
+                        if (m.emisor !== 'familia') {
+                            llegoRespuestaDocente = true;
+                        }
+                    }
+                });
+
+                if (llegoRespuestaDocente && ventana.classList.contains('hidden')) {
+                    badgeNuevo.classList.remove('hidden');
+                }
+
+                if (data.estado === 'cerrada' && estadoConsultaServidor !== 'cerrada') {
+                    estadoConsultaServidor = 'cerrada';
+                    estadoCabecera.textContent = `Ticket ${codigoSeguimiento} • Cerrada`;
+                    deshabilitarInput('Esta consulta fue cerrada');
+                    agregarMensaje(
+                        'bot',
+                        '🔒 El docente dio por finalizada esta consulta. Si tenés otra duda, tocá <strong>Inicio</strong> arriba para abrir una nueva.'
+                    );
+                }
+            } catch (e) {
+                console.error('Error sincronizando hilo del consultor:', e);
+            }
+        }
+
+        setInterval(() => {
+            sincronizarHiloConsultor(false);
+        }, 3000);
     });
 </script>
