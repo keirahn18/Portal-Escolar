@@ -2,14 +2,19 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
-    public function test_la_raiz_redirige_al_login(): void
+    use RefreshDatabase;
+
+    public function test_el_portal_publico_carga_correctamente(): void
     {
+        $this->withoutVite();
+
         $response = $this->get('/');
 
-        $response->assertRedirect(route('login'));
+        $response->assertOk();
     }
 }
