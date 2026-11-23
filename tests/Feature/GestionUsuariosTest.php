@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Institucion;
 use App\Models\Rol;
 use App\Models\Usuario;
 use Database\Seeders\RolesYInstitucionSeeder;
@@ -17,6 +18,18 @@ class GestionUsuariosTest extends TestCase
         parent::setUp();
         $this->withoutVite();
         $this->seed(RolesYInstitucionSeeder::class);
+    }
+
+    private function crearDocente(): Usuario
+    {
+        return Usuario::create([
+            'fk_id_rol' => Rol::where('nombre', 'Docente')->first()->id_rol,
+            'fk_id_institucion' => Institucion::first()->id_institucion,
+            'nombre' => 'Juan',
+            'apellido' => 'Pérez',
+            'email' => 'esc-30111222@gmail.com',
+            'password' => 'docente1234',
+        ]);
     }
 
     public function test_un_visitante_no_puede_ver_el_listado_de_usuarios(): void
@@ -91,6 +104,53 @@ class GestionUsuariosTest extends TestCase
 
         $this->assertDatabaseMissing('usuarios', [
             'email' => 'ana.gomez@gmail.com',
+        ]);
+    }
+
+    public function test_el_admin_puede_editar_un_usuario(): void
+    {
+        $admin = Usuario::where('email', 'admin@gmail.com')->first();
+        $docente = $this->crearDocente();
+
+        $response = $this->actingAs($admin)->put('/admin/usuarios/' . $docente->id_usuario, [
+            'nombre' => 'Juan Carlos',
+            'apellido' => 'Pérez',
+            'email' => $docente->email,
+            'fk_id_rol' => $docente->fk_id_rol,
+        ]);
+
+        $response->assertRedirect('/admin/usuarios');
+
+        $this->assertDatabaseHas('usuarios', [
+            'id_usuario' => $docente->id_usuario,
+            'nombre' => 'Juan Carlos',
+        ]);
+    }
+
+    public function test_el_admin_puede_eliminar_un_usuario(): void
+    {
+        $admin = Usuario::where('email', 'admin@gmail.com')->first();
+        $docente = $this->crearDocente();
+
+        $response = $this->actingAs($admin)->delete('/admin/usuarios/' . $docente->id_usuario);
+
+        $response->assertRedirect('/admin/usuarios');
+
+        $this->assertDatabaseMissing('usuarios', [
+            'id_usuario' => $docente->id_usuario,
+        ]);
+    }
+
+    public function test_el_admin_no_puede_eliminarse_a_si_mismo(): void
+    {
+        $admin = Usuario::where('email', 'admin@gmail.com')->first();
+
+        $response = $this->actingAs($admin)->delete('/admin/usuarios/' . $admin->id_usuario);
+
+        $response->assertSessionHasErrors('error');
+
+        $this->assertDatabaseHas('usuarios', [
+            'id_usuario' => $admin->id_usuario,
         ]);
     }
 }
