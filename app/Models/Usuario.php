@@ -44,4 +44,15 @@ class Usuario extends Authenticatable
     {
         return $this->belongsTo(Institucion::class, 'fk_id_institucion', 'id_institucion');
     }
+
+    public function esAdmin(): bool
+    {
+        $rol = strtolower($this->rol->nombre ?? '');
+        return in_array($rol, ['administrador', 'directivo']);
+    }
+
+    public function esDocente(): bool
+    {
+        return strtolower($this->rol->nombre ?? '') === 'docente';
+    }
 }
