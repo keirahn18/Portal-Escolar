@@ -62,4 +62,35 @@ class GestionUsuariosTest extends TestCase
             'email' => 'esc-40123456@gmail.com',
         ]);
     }
+
+    public function test_no_se_puede_crear_un_usuario_con_campos_vacios(): void
+    {
+        $admin = Usuario::where('email', 'admin@gmail.com')->first();
+
+        $response = $this->actingAs($admin)->post('/admin/usuarios', []);
+
+        $response->assertSessionHasErrors(['nombre', 'apellido', 'email', 'password', 'fk_id_rol']);
+
+        $this->assertDatabaseCount('usuarios', 1);
+    }
+
+    public function test_no_se_puede_crear_un_usuario_con_email_de_formato_invalido(): void
+    {
+        $admin = Usuario::where('email', 'admin@gmail.com')->first();
+        $rolDocente = Rol::where('nombre', 'Docente')->first();
+
+        $response = $this->actingAs($admin)->post('/admin/usuarios', [
+            'nombre' => 'Ana',
+            'apellido' => 'Gómez',
+            'email' => 'ana.gomez@gmail.com',
+            'password' => 'clave1234',
+            'fk_id_rol' => $rolDocente->id_rol,
+        ]);
+
+        $response->assertSessionHasErrors('email');
+
+        $this->assertDatabaseMissing('usuarios', [
+            'email' => 'ana.gomez@gmail.com',
+        ]);
+    }
 }
