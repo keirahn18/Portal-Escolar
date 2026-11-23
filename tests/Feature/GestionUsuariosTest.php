@@ -153,4 +153,30 @@ class GestionUsuariosTest extends TestCase
             'id_usuario' => $admin->id_usuario,
         ]);
     }
+        public function test_un_docente_no_puede_ver_el_listado_de_usuarios(): void
+    {
+        $docente = $this->crearDocente();
+
+        $response = $this->actingAs($docente)->get('/admin/usuarios');
+
+        $response->assertForbidden();
+    }
+
+    public function test_un_docente_no_puede_crear_usuarios(): void
+    {
+        $docente = $this->crearDocente();
+        $rolDocente = Rol::where('nombre', 'Docente')->first();
+
+        $this->actingAs($docente)->post('/admin/usuarios', [
+            'nombre' => 'Ana',
+            'apellido' => 'Gómez',
+            'email' => 'esc-40123456@gmail.com',
+            'password' => 'clave1234',
+            'fk_id_rol' => $rolDocente->id_rol,
+        ]);
+
+        $this->assertDatabaseMissing('usuarios', [
+            'email' => 'esc-40123456@gmail.com',
+        ]);
+    }
 }
