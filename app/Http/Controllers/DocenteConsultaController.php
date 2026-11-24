@@ -12,25 +12,29 @@ use Illuminate\Support\Facades\Auth;
 class DocenteConsultaController extends Controller
 {
     /**
-     * Vista principal de la bandeja de chats asignados al docente.
+     * Vista principal de la bandeja de chats.
      */
     public function index()
     {
-        $usuario = Auth::user();
+        $usuario = Auth::user();$esAdmin = $this->esAdministrador($usuario);
 
         $consultas = $this->queryConsultas($usuario)
-            ->with(['mensajes' => fn($q) => $q->latest('fecha')])
+            ->with(['mensajes' => fn($q) =>$q->latest('fecha'), 'docenteAsignado'])
             ->orderByRaw("FIELD(estado, 'pendiente', 'en_atencion', 'cerrada')")
             ->orderByDesc('fecha')
             ->get();
 
-        // Todos los usuarios/docentes disponibles para derivar (sin exigir filtro de activo)
-        $docentes = Usuario::where('id_usuario', '!=', $usuario->id_usuario)
+        // Docentes disponibles para derivación (excluye al usuario actual y a administradores)
+        $docentes = Usuario::where('id_usuario', '!=',$usuario->id_usuario)
+            ->whereHas('rol', function ($q) {$q->whereRaw('LOWER(nombre) NOT IN (?, ?, ?, ?, ?)', [
+                    'admin', 'administrador', 'directivo', 'director', 'directora'
+                ]);
+            })
             ->orderBy('apellido')
             ->orderBy('nombre')
             ->get(['id_usuario', 'nombre', 'apellido']);
 
-        return view('panel.consultas.index', compact('consultas', 'docentes'));
+        return view('panel.consultas.index', compact('consultas', 'docentes', 'esAdmin'));
     }
 
     /**
@@ -41,12 +45,12 @@ class DocenteConsultaController extends Controller
         $usuario = Auth::user();
 
         $consultas = $this->queryConsultas($usuario)
-            ->with(['mensajes'])
+            ->with(['mensajes', 'docenteAsignado'])
             ->orderByRaw("FIELD(estado, 'pendiente', 'en_atencion', 'cerrada')")
             ->orderByDesc('fecha')
             ->get()
             ->map(function ($c) {
-                $ultimo = $c->mensajes->last();
+                $ultimo =$c->mensajes->last();
                 return [
                     'id_consulta'        => $c->id_consulta,
                     'codigo_seguimiento' => $c->codigo_seguimiento,
@@ -54,8 +58,11 @@ class DocenteConsultaController extends Controller
                     'contacto'           => $c->contacto,
                     'asunto'             => $c->asunto,
                     'estado'             => $c->estado,
+                    'docente_asignado'   => $c->docenteAsignado
+                        ? "Prof. {$c->docenteAsignado->nombre} {$c->docenteAsignado->apellido}"
+                        : 'Sin asignar',
                     'ultimo_mensaje'     => $ultimo ? $ultimo->contenido : '',
-                    'ultima_hora'        => $ultimo ? $ultimo->fecha->format('d/m H:i') : $c->fecha->format('d/m H:i'),
+                    'ultima_hora'        => $ultimo ? $ultimo->fecha->format('d/m H:i') :$c->fecha->format('d/m H:i'),
                     'sin_responder'      => $c->estado === 'pendiente',
                 ];
             });
@@ -68,9 +75,10 @@ class DocenteConsultaController extends Controller
      */
     public function mensajes(Consulta $consulta)
     {
-        $this->autorizarAcceso($consulta);
+        $this->autorizarLectura($consulta);
 
         $consulta->load(['mensajes.usuario', 'docenteAsignado']);
+        $usuario = Auth::user();$esAdmin = $this->esAdministrador($usuario);
 
         return response()->json([
             'id_consulta'        => $consulta->id_consulta,
@@ -79,13 +87,17 @@ class DocenteConsultaController extends Controller
             'contacto'           => $consulta->contacto,
             'asunto'             => $consulta->asunto,
             'estado'             => $consulta->estado,
+            'docente_asignado'   => $consulta->docenteAsignado
+                ? "Prof. {$consulta->docenteAsignado->nombre} {$consulta->docenteAsignado->apellido}"
+                : 'Sin asignar',
+            'puede_gestionar'    => !$esAdmin && (int) $consulta->fk_id_usuario === (int)$usuario->id_usuario,
             'mensajes'           => $consulta->mensajes
-                ->filter(fn($m) => $m->contenido !== '(Iniciando consulta con docente)')
+                ->filter(fn($m) =>$m->contenido !== '(Iniciando consulta con docente)')
                 ->values()
                 ->map(fn($m) => [
                     'id'        => $m->id_mensaje_consulta,
                     'emisor'    => $m->emisor,
-                    'autor'     => $m->emisor === 'docente' && $m->usuario
+                    'autor'     => $m->emisor === 'docente' &&$m->usuario
                         ? "Prof. {$m->usuario->nombre} {$m->usuario->apellido}"
                         : $consulta->nombre_consultante,
                     'contenido' => $m->contenido,
@@ -95,13 +107,13 @@ class DocenteConsultaController extends Controller
     }
 
     /**
-     * Guarda la respuesta del docente en el hilo.
+     * Guarda la respuesta del docente asignado en el hilo.
      */
-    public function responder(Request $request, Consulta $consulta)
+    public function responder(Request $request, Consulta$consulta)
     {
-        $this->autorizarAcceso($consulta);
+        $this->autorizarGestion($consulta);
 
-        $data = $request->validate([
+        $data =$request->validate([
             'contenido' => 'required|string|max:2000',
         ]);
 
@@ -149,9 +161,9 @@ class DocenteConsultaController extends Controller
     /**
      * Deriva la consulta a otro docente registrado en el sistema.
      */
-    public function derivar(Request $request, Consulta $consulta)
+    public function derivar(Request $request, Consulta$consulta)
     {
-        $this->autorizarAcceso($consulta);
+        $this->autorizarGestion($consulta);
 
         if ($consulta->estado === 'cerrada') {
             return response()->json([
@@ -160,12 +172,12 @@ class DocenteConsultaController extends Controller
             ], 422);
         }
 
-        $data = $request->validate([
+        $data =$request->validate([
             'fk_id_usuario' => ['required', 'integer', 'exists:usuarios,id_usuario'],
             'motivo'        => ['nullable', 'string', 'max:255'],
         ]);
 
-        if ((int) $data['fk_id_usuario'] === (int) $consulta->fk_id_usuario) {
+        if ((int) $data['fk_id_usuario'] === (int)$consulta->fk_id_usuario) {
             return response()->json([
                 'ok'      => false,
                 'mensaje' => 'La consulta ya está asignada a ese docente.',
@@ -215,30 +227,51 @@ class DocenteConsultaController extends Controller
      */
     public function cerrar(Consulta $consulta)
     {
-        $this->autorizarAcceso($consulta);
+        $this->autorizarGestion($consulta);
 
         $consulta->update(['estado' => 'cerrada']);
 
         return response()->json(['ok' => true]);
     }
 
+    private function esAdministrador($usuario): bool
+    {
+        if (!$usuario) {
+            return false;
+        }
+
+        if (method_exists($usuario, 'esAdmin') &&$usuario->esAdmin()) {
+            return true;
+        }
+
+        $nombreRol = strtolower(trim($usuario->rol->nombre ?? $usuario->role ?? ''));
+        return in_array($nombreRol, ['admin', 'administrador', 'directivo', 'director', 'directora']);
+    }
+
     private function queryConsultas($usuario)
     {
-        // Si es admin/directivo puede ver todas; si es docente ve las asignadas a él
-        if (method_exists($usuario, 'esAdmin') && $usuario->esAdmin()) {
+        if ($this->esAdministrador($usuario)) {
             return Consulta::query();
         }
 
         return Consulta::where('fk_id_usuario', $usuario->id_usuario);
     }
 
-    private function autorizarAcceso(Consulta $consulta): void
+    private function autorizarLectura(Consulta $consulta): void
     {
         $usuario = Auth::user();
-        $esAdmin = method_exists($usuario, 'esAdmin') && $usuario->esAdmin();
 
-        if (!$esAdmin && (int) $consulta->fk_id_usuario !== (int) $usuario->id_usuario) {
-            abort(403, 'No tenés permiso para acceder a esta consulta.');
+        if (!$this->esAdministrador($usuario) && (int) $consulta->fk_id_usuario !== (int)$usuario->id_usuario) {
+            abort(403, 'No tenés permiso para ver esta consulta.');
+        }
+    }
+
+    private function autorizarGestion(Consulta $consulta): void
+    {
+        $usuario = Auth::user();
+
+        if ($this->esAdministrador($usuario) || (int) $consulta->fk_id_usuario !== (int)$usuario->id_usuario) {
+            abort(403, 'Solo el docente asignado a esta consulta puede responder, derivar o cerrarla.');
         }
     }
 }

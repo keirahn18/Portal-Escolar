@@ -30,17 +30,8 @@
                     Calendario Escolar
                 </a>
 
-                <div class="h-6 w-px bg-slate-200 mx-2"></div>
-
-                @auth
-                    <a href="{{ route('admin.dashboard') }}" class="bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition">
-                        Ir al Panel
-                    </a>
-                @else
-                    <a href="{{ route('login') }}" class="bg-slate-900 hover:bg-sky-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow-xs transition">
-                        Acceso Personal
-                    </a>
-                @endauth
+                
+                
             </div>
 
             <!-- Botón Menú Móvil -->
